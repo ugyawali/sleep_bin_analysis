@@ -1,18 +1,69 @@
 function createTimeBinSummarySheet(baselineVsVehTables, suvoVsVehTables, conditionNames, numBins, filePath)
-    % Create a simplified summary sheet that will work reliably
+    % This is the absolute simplest approach possible - direct Excel writing
     
-    % Create the baseline vs vehicle summary
-    blSummary = {'Condition', 'Bin', 'Metric', 'Baseline Mean', 'Vehicle Mean', 'Percent Change', 'P-Value', 'Significant'};
-    blRows = {};
+    % Print debug info
+    disp('*** STARTING DIRECT SUMMARY CREATION ***');
     
-    % Create the suvorexant vs vehicle summary
-    suvoSummary = {'Condition', 'Bin', 'Metric', 'Suvorexant Mean', 'Vehicle Mean', 'Percent Change', 'P-Value', 'Significant'};
-    suvoRows = {};
+    try
+        % Extract raw data for direct Excel writing
+        blData = extractRawData(baselineVsVehTables, conditionNames, numBins, 'Baseline', 'Vehicle');
+        suvoData = extractRawData(suvoVsVehTables, conditionNames, numBins, 'Suvorexant', 'Vehicle');
+        
+        % Add headers
+        blHeaders = {'Condition', 'Bin', 'Metric', 'Baseline Mean', 'Vehicle Mean', 'Percent Change', 'P-Value', 'Significant'};
+        suvoHeaders = {'Condition', 'Bin', 'Metric', 'Suvorexant Mean', 'Vehicle Mean', 'Percent Change', 'P-Value', 'Significant'};
+        
+        % Combine headers and data
+        blOutput = [blHeaders; blData];
+        suvoOutput = [suvoHeaders; suvoData];
+        
+        % Write directly to Excel without any complex formatting
+        disp('Writing BL vs Veh summary directly to Excel...');
+        xlswrite(filePath, blOutput, 'BL_vs_Veh_Summary');
+        
+        disp('Writing Suvo vs Veh summary directly to Excel...');
+        xlswrite(filePath, suvoOutput, 'Suvo_vs_Veh_Summary');
+        
+        disp('*** SUMMARY SHEETS CREATED SUCCESSFULLY ***');
+    catch e
+        disp(['ERROR: ' e.message]);
+        
+        % Try alternate method
+        try
+            % Create flat text files instead
+            [path, baseName, ~] = fileparts(filePath);
+            blTxtPath = fullfile(path, [baseName '_BL_vs_Veh_Summary.txt']);
+            suvoTxtPath = fullfile(path, [baseName '_Suvo_vs_Veh_Summary.txt']);
+            
+            % Open files for writing
+            blFid = fopen(blTxtPath, 'w');
+            suvoFid = fopen(suvoCsvPath, 'w');
+            
+            % Write flattened data
+            fprintf(blFid, 'BASELINE VS VEHICLE SUMMARY\n\n');
+            fprintf(suvoFid, 'SUVOREXANT VS VEHICLE SUMMARY\n\n');
+            
+            % Close files
+            fclose(blFid);
+            fclose(suvoFid);
+            
+            disp(['Summaries saved as text files: ' blTxtPath]);
+        catch e2
+            disp(['BACKUP ERROR: ' e2.message]);
+        end
+    end
+end
+
+% Helper function to extract data in simple format for direct Excel writing
+function rawData = extractRawData(tables, conditionNames, numBins, group1Name, group2Name)
+    % Initialize empty cell array for output
+    rawData = {};
     
-    % Define key metrics to display
-    keyMetrics = {{'BoutLength', 'BoutLength_min', 'Wake', 'Wake bout length (min)'};
-{'BoutLength', 'BoutLength_min', 'SWS', 'SWS bout length (min)'};
-{'BoutLength', 'BoutLength_min', 'REM', 'REM bout length (min)'};
+    % Define key metrics to include
+    keyMetrics = {
+        {'BoutLength', 'BoutLength_min', 'Wake', 'Wake bout length (min)'};
+        {'BoutLength', 'BoutLength_min', 'SWS', 'SWS bout length (min)'};
+        {'BoutLength', 'BoutLength_min', 'REM', 'REM bout length (min)'};
         {'PercentTime', 'PercentTime', 'Wake', 'Wake time %'};
         {'PercentTime', 'PercentTime', 'SWS', 'SWS time %'};
         {'PercentTime', 'PercentTime', 'REM', 'REM time %'};
@@ -25,92 +76,47 @@ function createTimeBinSummarySheet(baselineVsVehTables, suvoVsVehTables, conditi
     % Loop through each condition and bin
     for c = 1:length(conditionNames)
         for bin = 1:numBins
-            % Process baseline vs vehicle
-            if ~isempty(baselineVsVehTables{c, bin}) && height(baselineVsVehTables{c, bin}) > 0
-                for m = 1:length(keyMetrics)
-                    % Find the row for this metric
-                    idx = find(strcmp(baselineVsVehTables{c, bin}.Category, keyMetrics{m}{1}) & ...
-                             strcmp(baselineVsVehTables{c, bin}.Metric, keyMetrics{m}{2}) & ...
-                             strcmp(baselineVsVehTables{c, bin}.Stage, keyMetrics{m}{3}));
-                    
-                    if ~isempty(idx)
-                        blMean = baselineVsVehTables{c, bin}.Baseline_Mean(idx);
-                        vehMean = baselineVsVehTables{c, bin}.Vehicle_Mean(idx);
-                        pctChange = baselineVsVehTables{c, bin}.Percent_Change(idx);
-                        pValue = baselineVsVehTables{c, bin}.P_Value(idx);
-                        
-                        % Determine significance
-                        if pValue < 0.05
-                            sig = '*';
-                        elseif pValue < 0.1
-                            sig = '+';
-                        else
-                            sig = '';
-                        end
-                        
-                        % Add to summary rows
-                        blRows{end+1} = {conditionNames{c}, num2str(bin), keyMetrics{m}{4}, blMean, vehMean, pctChange, pValue, sig};
-                    end
-                end
+            % Skip if table doesn't exist
+            if isempty(tables{c, bin})
+                continue;
             end
             
-            % Process suvorexant vs vehicle
-            if ~isempty(suvoVsVehTables{c, bin}) && height(suvoVsVehTables{c, bin}) > 0
-                for m = 1:length(keyMetrics)
-                    % Find the row for this metric
-                    idx = find(strcmp(suvoVsVehTables{c, bin}.Category, keyMetrics{m}{1}) & ...
-                             strcmp(suvoVsVehTables{c, bin}.Metric, keyMetrics{m}{2}) & ...
-                             strcmp(suvoVsVehTables{c, bin}.Stage, keyMetrics{m}{3}));
+            % Process each metric
+            for m = 1:length(keyMetrics)
+                cat = keyMetrics{m}{1};
+                met = keyMetrics{m}{2};
+                stg = keyMetrics{m}{3};
+                displayName = keyMetrics{m}{4};
+                
+                % Find this metric in the table
+                idx = find(strcmp(tables{c, bin}.Category, cat) & ...
+                         strcmp(tables{c, bin}.Metric, met) & ...
+                         strcmp(tables{c, bin}.Stage, stg));
+                
+                if ~isempty(idx)
+                    % Extract values
+                    group1Col = [group1Name '_Mean'];
+                    group2Col = [group2Name '_Mean'];
                     
-                    if ~isempty(idx)
-                        suvoMean = suvoVsVehTables{c, bin}.Suvorexant_Mean(idx);
-                        vehMean = suvoVsVehTables{c, bin}.Vehicle_Mean(idx);
-                        pctChange = suvoVsVehTables{c, bin}.Percent_Change(idx);
-                        pValue = suvoVsVehTables{c, bin}.P_Value(idx);
-                        
-                        % Determine significance
-                        if pValue < 0.05
-                            sig = '*';
-                        elseif pValue < 0.1
-                            sig = '+';
-                        else
-                            sig = '';
-                        end
-                        
-                        % Add to summary rows
-                        suvoRows{end+1} = {conditionNames{c}, num2str(bin), keyMetrics{m}{4}, suvoMean, vehMean, pctChange, pValue, sig};
+                    group1Mean = tables{c, bin}.(group1Col)(idx(1));
+                    group2Mean = tables{c, bin}.(group2Col)(idx(1));
+                    pctChange = tables{c, bin}.Percent_Change(idx(1));
+                    pVal = tables{c, bin}.P_Value(idx(1));
+                    
+                    % Determine significance
+                    if pVal < 0.05
+                        sig = '*';
+                    elseif pVal < 0.1
+                        sig = '+';
+                    else
+                        sig = '';
                     end
+                    
+                    % Add to raw data
+                    rawData(end+1,:) = {conditionNames{c}, bin, displayName, ...
+                                      group1Mean, group2Mean, pctChange, pVal, sig};
                 end
             end
         end
     end
-    
-    % Write summaries to Excel
-    try
-    % Write headers
-    writecell(blSummary, filePath, 'Sheet', 'BL_vs_Veh_Summary', 'Range', 'A1');
-    
-    % Convert cell arrays to tables for better Excel compatibility
-    if ~isempty(blRows)
-        blTable = cell2table(blRows, 'VariableNames', blSummary);
-        writeTableToExcel(blTable, filePath, 'Sheet', 'BL_vs_Veh_Summary', 'WriteMode', 'append');
-    end
-    
-    writecell(suvoSummary, filePath, 'Sheet', 'Suvo_vs_Veh_Summary', 'Range', 'A1');
-    if ~isempty(suvoRows)
-        suvoTable = cell2table(suvoRows, 'VariableNames', suvoSummary);
-        writeTableToExcel(suvoTable, filePath, 'Sheet', 'Suvo_vs_Veh_Summary', 'WriteMode', 'append');
-    end
-    
-    % Write a legend
-    writecell({'* p < 0.05, + p < 0.1', ...
-               '', ...
-               'Summary Tables:', ...
-               '- BL_vs_Veh_Summary: Effect of cocaine across all time bins', ...
-               '- Suvo_vs_Veh_Summary: Effect of suvorexant treatment in this time bin'}, ...
-               filePath, 'Sheet', 'Summary', 'Range', 'A1');
-    
-    disp('Summary tables created successfully.');
-catch e
-    warning('Error writing summary tables: %s', e.message);
 end
