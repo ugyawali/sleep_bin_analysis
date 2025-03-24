@@ -2,7 +2,7 @@ function analyzeSleepDataByTimeBins()
     % Main function to analyze sleep data across multiple conditions with specific time bins
     %
     % This function allows the user to:
-    % 1. Select a time bin resolution (1, 3, or 6 hours)
+    % 1. Select a time bin resolution (1, 3, 6 or 12 hours)
     % 2. Select baseline and extinction day folders
     % 3. Process sleep data within chosen time bins
     % 4. Generate summaries and comparisons for each time bin
@@ -130,6 +130,8 @@ function analyzeSleepDataByTimeBins()
                 selectedExtDays, fullfile(pathName, fileName), ...
                 baselineData, extDayData, selectedBinSize, numBins);
             disp(['Results saved to ' fullfile(pathName, fileName)]);
+            disp('Creating separate summary files...');
+            saveSummaryData(baselineVsVehTables, suvoVsVehTables, conditionNames, numBins, filePath);
         end
     end
 end
